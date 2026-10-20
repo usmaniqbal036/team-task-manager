@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+    volumes:
+      - mongo-data:/data/db
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: session_stores
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "5000:8080"
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      FRONTEND_URL: http://localhost:5173
+      MONGODB_URI: mongodb+srv://<username>:<password>@<cluster-host>/team-task-manager?retryWrites=true&w=majority
+      DATABASE_URL: postgres://postgres:password123@postgres:5432/session_stores
+      SESSION_STORE: postgres
+      SESSION_SECRET: docker_development_secret_key_987654321
+    depends_on:
+      - mongodb
+      - postgres
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "5173:80"
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:
+  pg-data:
