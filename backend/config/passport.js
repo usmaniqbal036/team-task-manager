@@ -22,6 +22,7 @@ export const configurePassport = () => {
             return done(null, false, { message: 'Invalid email or password.' });
           }
 
+          // Return sanitized user object
           const safeUser = {
             id: user.id,
             name: user.name,

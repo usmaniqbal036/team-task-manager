@@ -4,6 +4,9 @@ import pg from 'pg';
 
 export const configureSession = () => {
   const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction && !process.env.SESSION_SECRET) {
+    throw new Error('FATAL: SESSION_SECRET environment variable is required in production.');
+  }
   const sessionSecret =
     process.env.SESSION_SECRET || 'dev_insecure_task_manager_secret_key_change_in_prod_123456';
   const sessionStoreType = process.env.SESSION_STORE || (isProduction ? 'postgres' : 'memory');
@@ -40,7 +43,7 @@ export const configureSession = () => {
         pool,
         tableName: 'user_sessions',
         createTableIfMissing: true,
-        ttl: 60 * 60 * 24 * 7,
+        ttl: 60 * 60 * 24 * 7, // 7 days in seconds
       });
       console.log('[Session] PostgreSQL persistent session store initialized.');
     }
@@ -58,7 +61,7 @@ export const configureSession = () => {
     rolling: true,
     proxy: true,
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? 'none' : 'lax',

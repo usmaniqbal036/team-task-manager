@@ -1,5 +1,6 @@
 import { DataStore } from '../services/dataStore.js';
 import { sendSuccess, sendError } from '../utils/responseHandler.js';
+import { isTeamMember, isTeamOwner, toId } from '../utils/access.js';
 
 export const getTasks = async (req, res, next) => {
   try {
@@ -31,16 +32,13 @@ export const getTaskById = async (req, res, next) => {
       return sendError(res, 'Task not found.', 404);
     }
 
-    const teamId = typeof task.team === 'object' ? task.team.id : task.team;
+    const teamId = toId(task.team);
     const team = await DataStore.getTeamById(teamId);
     if (!team) {
       return sendError(res, 'Associated team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    const memberIds = (team.members || []).map((m) => (typeof m === 'object' ? m.id : m));
-
-    if (ownerId !== userId && !memberIds.includes(userId)) {
+    if (!isTeamMember(team, userId)) {
       return sendError(res, 'Access denied. You do not have permission to view this task.', 403);
     }
 
@@ -60,11 +58,8 @@ export const createTask = async (req, res, next) => {
       return sendError(res, 'Specified team does not exist.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    const memberIds = (team.members || []).map((m) => (typeof m === 'object' ? m.id : m));
-
     // Verify current user is a team member or owner
-    if (ownerId !== userId && !memberIds.includes(userId)) {
+    if (!isTeamMember(team, userId)) {
       return sendError(
         res,
         'Access denied. You cannot create tasks for a team you are not part of.',
@@ -74,7 +69,7 @@ export const createTask = async (req, res, next) => {
 
     // Verify assignee belongs to this team if provided
     if (assignedTo) {
-      if (assignedTo !== ownerId && !memberIds.includes(assignedTo)) {
+      if (!isTeamMember(team, assignedTo)) {
         return sendError(
           res,
           'Validation failed: Assigned user is not a member of this team.',
@@ -113,23 +108,20 @@ export const updateTask = async (req, res, next) => {
       return sendError(res, 'Task not found.', 404);
     }
 
-    const teamId = typeof task.team === 'object' ? task.team.id : task.team;
+    const teamId = toId(task.team);
     const team = await DataStore.getTeamById(teamId);
     if (!team) {
       return sendError(res, 'Associated team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    const memberIds = (team.members || []).map((m) => (typeof m === 'object' ? m.id : m));
-
     // Check user membership
-    if (ownerId !== userId && !memberIds.includes(userId)) {
+    if (!isTeamMember(team, userId)) {
       return sendError(res, 'Access denied. You do not belong to this team.', 403);
     }
 
     // If new assignee is passed, verify assignee is in the team
     if (req.body.assignedTo) {
-      if (req.body.assignedTo !== ownerId && !memberIds.includes(req.body.assignedTo)) {
+      if (!isTeamMember(team, req.body.assignedTo)) {
         return sendError(
           res,
           'Validation failed: Assigned user is not a member of this team.',
@@ -172,16 +164,13 @@ export const updateTaskStatus = async (req, res, next) => {
       return sendError(res, 'Task not found.', 404);
     }
 
-    const teamId = typeof task.team === 'object' ? task.team.id : task.team;
+    const teamId = toId(task.team);
     const team = await DataStore.getTeamById(teamId);
     if (!team) {
       return sendError(res, 'Associated team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    const memberIds = (team.members || []).map((m) => (typeof m === 'object' ? m.id : m));
-
-    if (ownerId !== userId && !memberIds.includes(userId)) {
+    if (!isTeamMember(team, userId)) {
       return sendError(res, 'Access denied. You do not belong to this team.', 403);
     }
 
@@ -202,17 +191,16 @@ export const deleteTask = async (req, res, next) => {
       return sendError(res, 'Task not found.', 404);
     }
 
-    const teamId = typeof task.team === 'object' ? task.team.id : task.team;
+    const teamId = toId(task.team);
     const team = await DataStore.getTeamById(teamId);
     if (!team) {
       return sendError(res, 'Associated team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    const creatorId = typeof task.createdBy === 'object' ? task.createdBy.id : task.createdBy;
+    const creatorId = toId(task.createdBy);
 
     // Delete permission: Only team owner or task creator can delete
-    if (userId !== ownerId && userId !== creatorId) {
+    if (!isTeamOwner(team, userId) && userId !== creatorId) {
       return sendError(
         res,
         'Access denied. Only the team owner or task creator can delete this task.',

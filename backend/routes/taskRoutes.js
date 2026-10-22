@@ -8,18 +8,19 @@ import {
   deleteTask,
 } from '../controllers/taskController.js';
 import { requireAuth } from '../middleware/auth.js';
-import { validateBody } from '../middleware/validate.js';
+import { validateBody, validateQuery } from '../middleware/validate.js';
 import {
   createTaskSchema,
   updateTaskSchema,
   updateTaskStatusSchema,
+  taskQuerySchema,
 } from '../validators/taskValidators.js';
 
 const router = Router();
 
 router.use(requireAuth);
 
-router.get('/', getTasks);
+router.get('/', validateQuery(taskQuerySchema), getTasks);
 router.post('/', validateBody(createTaskSchema), createTask);
 router.get('/:id', getTaskById);
 router.put('/:id', validateBody(updateTaskSchema), updateTask);

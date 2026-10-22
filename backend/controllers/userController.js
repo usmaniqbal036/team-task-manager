@@ -1,5 +1,6 @@
 import { DataStore } from '../services/dataStore.js';
 import { sendSuccess } from '../utils/responseHandler.js';
+import { toId } from '../utils/access.js';
 
 export const searchUsers = async (req, res, next) => {
   try {
@@ -64,14 +65,45 @@ export const getDashboardStats = async (req, res, next) => {
           id: tm.id,
           name: tm.name,
           memberCount: (tm.members || []).length,
-          taskCount: tasks.filter((tk) => {
-            const teamId = typeof tk.team === 'object' ? tk.team.id : tk.team;
-            return teamId === tm.id;
-          }).length,
+          taskCount: tasks.filter((tk) => toId(tk.team) === tm.id).length,
         })),
       },
       'Dashboard stats calculated successfully.'
     );
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// Due-date reminders shown once after login: the user's own open tasks that are
+// overdue or due within the next REMINDER_WINDOW_DAYS days.
+const REMINDER_WINDOW_DAYS = 3;
+
+export const getReminders = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const tasks = await DataStore.getTasks({ userId, assigneeId: userId });
+
+    const now = new Date();
+    const windowEnd = new Date(now.getTime() + REMINDER_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const toReminder = (t) => ({
+      id: t.id,
+      title: t.title,
+      priority: t.priority,
+      dueDate: t.dueDate,
+      team: t.team ? { id: t.team.id, name: t.team.name } : null,
+    });
+    const byDueDate = (a, b) => new Date(a.dueDate) - new Date(b.dueDate);
+
+    const open = tasks.filter((t) => t.status !== 'Completed' && t.dueDate);
+    const overdue = open.filter((t) => new Date(t.dueDate) < now).sort(byDueDate).map(toReminder);
+    const dueSoon = open
+      .filter((t) => new Date(t.dueDate) >= now && new Date(t.dueDate) <= windowEnd)
+      .sort(byDueDate)
+      .map(toReminder);
+
+    return sendSuccess(res, { overdue, dueSoon, windowDays: REMINDER_WINDOW_DAYS }, 'Reminders retrieved.');
   } catch (error) {
     return next(error);
   }

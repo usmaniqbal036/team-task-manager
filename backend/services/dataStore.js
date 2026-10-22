@@ -3,7 +3,9 @@ import bcrypt from 'bcryptjs';
 import { User } from '../models/User.js';
 import { Team } from '../models/Team.js';
 import { Task } from '../models/Task.js';
+import { isTeamMember, toId } from '../utils/access.js';
 
+// In-memory fallback database for local preview/development before MongoDB Atlas is linked
 class MemoryDatabase {
   users = new Map();
   teams = new Map();
@@ -18,25 +20,25 @@ class MemoryDatabase {
     const hash = await bcrypt.hash('Password123!', salt);
 
     const u1 = {
-      id: 'usr_usman_001',
-      name: 'Usman Iqbal',
-      email: 'usman@example.com',
+      id: 'usr_alex_001',
+      name: 'Alex Morgan',
+      email: 'alex@example.com',
       passwordHash: hash,
       createdAt: new Date('2026-01-10T10:00:00Z'),
       updatedAt: new Date('2026-01-10T10:00:00Z'),
     };
     const u2 = {
       id: 'usr_sarah_002',
-      name: 'Sarah Khan',
+      name: 'Sarah Chen',
       email: 'sarah@example.com',
       passwordHash: hash,
       createdAt: new Date('2026-01-11T11:00:00Z'),
       updatedAt: new Date('2026-01-11T11:00:00Z'),
     };
     const u3 = {
-      id: 'usr_Ali_003',
-      name: 'Ali Hassan',
-      email: 'ali@example.com',
+      id: 'usr_david_003',
+      name: 'David Miller',
+      email: 'david@example.com',
       passwordHash: hash,
       createdAt: new Date('2026-01-12T09:30:00Z'),
       updatedAt: new Date('2026-01-12T09:30:00Z'),
@@ -143,13 +145,15 @@ class MemoryDatabase {
   }
 }
 
-export const memoryDb = new MemoryDatabase();
-memoryDb.initSeed();
+export const memoryDb = new MemoryDatabase(); // seeded on demand by config/db.js (development only)
+
+// Escapes user input so it is matched literally inside $regex queries (prevents ReDoS / regex injection)
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const isMongooseConnected = () => mongoose.connection.readyState === 1;
 
 export class DataStore {
-
+  // USER METHODS
   static async findUserByEmail(email, includePassword = false) {
     const cleanEmail = email.toLowerCase().trim();
     if (isMongooseConnected()) {
@@ -200,8 +204,8 @@ export class DataStore {
     if (isMongooseConnected()) {
       const filter = {
         $or: [
-          { name: { $regex: term, $options: 'i' } },
-          { email: { $regex: term, $options: 'i' } },
+          { name: { $regex: escapeRegex(term), $options: 'i' } },
+          { email: { $regex: escapeRegex(term), $options: 'i' } },
         ],
       };
       if (excludeUserId && mongoose.Types.ObjectId.isValid(excludeUserId)) {
@@ -253,7 +257,7 @@ export class DataStore {
     return { ...newUser };
   }
 
-
+  // TEAM METHODS
   static async getTeamsForUser(userId) {
     if (isMongooseConnected()) {
       const objId = new mongoose.Types.ObjectId(userId);
@@ -278,6 +282,7 @@ export class DataStore {
           name: m.name,
           email: m.email,
         })),
+        pendingInvites: (t.invites || []).map((i) => ({ email: i.email, invitedAt: i.createdAt })),
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
       }));
@@ -285,9 +290,7 @@ export class DataStore {
 
     const list = [];
     for (const t of memoryDb.teams.values()) {
-      const ownerId = typeof t.owner === 'object' ? t.owner.id : t.owner;
-      const memberIds = (t.members || []).map((m) => (typeof m === 'object' ? m.id : m));
-      if (ownerId === userId || memberIds.includes(userId)) {
+      if (isTeamMember(t, userId)) {
         list.push(this.populateTeam(t));
       }
     }
@@ -313,6 +316,7 @@ export class DataStore {
           name: m.name,
           email: m.email,
         })),
+        pendingInvites: (t.invites || []).map((i) => ({ email: i.email, invitedAt: i.createdAt })),
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
       };
@@ -381,13 +385,67 @@ export class DataStore {
 
     const t = memoryDb.teams.get(teamId);
     if (!t) return null;
-    const memberIds = t.members.map((m) => (typeof m === 'object' ? m.id : m));
+    const memberIds = t.members.map((m) => (toId(m)));
     if (!memberIds.includes(memberUserId)) {
       t.members.push(memberUserId);
       t.updatedAt = new Date();
       memoryDb.teams.set(teamId, t);
     }
     return this.populateTeam(t);
+  }
+
+  // Email invitations are stubbed (no SMTP): the invite is stored and the user joins on registration.
+  static async addPendingInvite(teamId, email, invitedById) {
+    const cleanEmail = email.toLowerCase().trim();
+    if (isMongooseConnected()) {
+      if (!mongoose.Types.ObjectId.isValid(teamId)) return null;
+      await Team.updateOne(
+        { _id: teamId, 'invites.email': { $ne: cleanEmail } },
+        {
+          $push: {
+            invites: {
+              email: cleanEmail,
+              invitedBy: new mongoose.Types.ObjectId(invitedById),
+              createdAt: new Date(),
+            },
+          },
+          updatedAt: new Date(),
+        }
+      ).exec();
+      return this.getTeamById(teamId);
+    }
+
+    const t = memoryDb.teams.get(teamId);
+    if (!t) return null;
+    t.invites = t.invites || [];
+    if (!t.invites.some((i) => i.email === cleanEmail)) {
+      t.invites.push({ email: cleanEmail, invitedBy: invitedById, createdAt: new Date() });
+      t.updatedAt = new Date();
+    }
+    return this.populateTeam(t);
+  }
+
+  // Called right after registration: joins the new user to every team that invited their email.
+  static async acceptPendingInvites(user) {
+    const email = user.email.toLowerCase().trim();
+    if (isMongooseConnected()) {
+      await Team.updateMany(
+        { 'invites.email': email },
+        {
+          $addToSet: { members: new mongoose.Types.ObjectId(user.id) },
+          $pull: { invites: { email } },
+          updatedAt: new Date(),
+        }
+      ).exec();
+      return;
+    }
+
+    for (const t of memoryDb.teams.values()) {
+      if (!(t.invites || []).some((i) => i.email === email)) continue;
+      if (!t.members.includes(user.id)) t.members.push(user.id);
+      t.invites = t.invites.filter((i) => i.email !== email);
+      t.updatedAt = new Date();
+    }
   }
 
   static async removeMemberFromTeam(teamId, memberUserId) {
@@ -407,7 +465,7 @@ export class DataStore {
     const t = memoryDb.teams.get(teamId);
     if (!t) return null;
     t.members = t.members.filter((m) => {
-      const id = typeof m === 'object' ? m.id : m;
+      const id = toId(m);
       return id !== memberUserId;
     });
     t.updatedAt = new Date();
@@ -424,9 +482,9 @@ export class DataStore {
     }
 
     if (!memoryDb.teams.has(teamId)) return false;
-    
+    // Cascade delete tasks in this team
     for (const [taskId, task] of memoryDb.tasks.entries()) {
-      const tTeamId = typeof task.team === 'object' ? task.team.id : task.team;
+      const tTeamId = toId(task.team);
       if (tTeamId === teamId) {
         memoryDb.tasks.delete(taskId);
       }
@@ -434,13 +492,14 @@ export class DataStore {
     return memoryDb.teams.delete(teamId);
   }
 
+  // TASK METHODS
   static async getTasks(filters) {
-  
+    // First, verify accessible teams for this user
     const userTeams = await this.getTeamsForUser(filters.userId);
     const accessibleTeamIds = new Set(userTeams.map((t) => t.id));
 
     if (filters.teamId && !accessibleTeamIds.has(filters.teamId)) {
-      return [];
+      return []; // Not authorized to view tasks of unrelated teams
     }
 
     if (isMongooseConnected()) {
@@ -467,7 +526,7 @@ export class DataStore {
       }
 
       if (filters.search) {
-        const regex = { $regex: filters.search, $options: 'i' };
+        const regex = { $regex: escapeRegex(filters.search), $options: 'i' };
         query.$or = [{ title: regex }, { description: regex }];
       }
 
@@ -502,7 +561,7 @@ export class DataStore {
 
     const list = [];
     for (const t of memoryDb.tasks.values()) {
-      const tTeamId = typeof t.team === 'object' ? t.team.id : t.team;
+      const tTeamId = toId(t.team);
       if (!accessibleTeamIds.has(tTeamId)) continue;
       if (filters.teamId && tTeamId !== filters.teamId) continue;
 
@@ -640,36 +699,38 @@ export class DataStore {
     return memoryDb.tasks.delete(taskId);
   }
 
-  
+  // Helpers for population in memory mode
   static populateTeam(t) {
-    const ownerId = typeof t.owner === 'object' ? t.owner.id : t.owner;
+    const ownerId = toId(t.owner);
     const ownerObj = memoryDb.users.get(ownerId);
 
     const populatedMembers = (t.members || []).map((m) => {
-      const mid = typeof m === 'object' ? m.id : m;
+      const mid = toId(m);
       const u = memoryDb.users.get(mid);
       return u
         ? { id: u.id, name: u.name, email: u.email }
         : { id: mid, name: 'Unknown User', email: '' };
     });
 
+    const { invites = [], ...rest } = t;
     return {
-      ...t,
+      ...rest,
       owner: ownerObj ? { id: ownerObj.id, name: ownerObj.name, email: ownerObj.email } : t.owner,
       members: populatedMembers,
+      pendingInvites: invites.map((i) => ({ email: i.email, invitedAt: i.createdAt })),
     };
   }
 
   static populateTask(t) {
-    const teamId = typeof t.team === 'object' ? t.team.id : t.team;
+    const teamId = toId(t.team);
     const teamObj = memoryDb.teams.get(teamId);
 
-    const createdById = typeof t.createdBy === 'object' ? t.createdBy.id : t.createdBy;
+    const createdById = toId(t.createdBy);
     const creatorObj = memoryDb.users.get(createdById);
 
     let assignedObj = null;
     if (t.assignedTo) {
-      const aid = typeof t.assignedTo === 'object' ? t.assignedTo.id : t.assignedTo;
+      const aid = toId(t.assignedTo);
       const u = memoryDb.users.get(aid);
       if (u) assignedObj = { id: u.id, name: u.name, email: u.email };
     }

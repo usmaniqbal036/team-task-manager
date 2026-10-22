@@ -18,7 +18,9 @@ export const register = async (req, res, next) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const user = await DataStore.createUser(name, email, passwordHash);
+    await DataStore.acceptPendingInvites(user); // join teams that invited this email
 
+    // Auto-login upon registration
     const safeUser = {
       id: user.id,
       name: user.name,
@@ -31,12 +33,12 @@ export const register = async (req, res, next) => {
       if (loginErr) {
         return next(loginErr);
       }
-
+      // Regenerate session to prevent fixation
       req.session.regenerate((regenErr) => {
         if (regenErr) {
           return next(regenErr);
         }
-
+        // Re-assign user to session after regenerate
         req.session.passport = { user: safeUser.id };
         req.session.save((saveErr) => {
           if (saveErr) return next(saveErr);
@@ -68,6 +70,7 @@ export const login = (req, res, next) => {
         return next(loginErr);
       }
 
+      // Regenerate session upon authentication to protect against session fixation attacks
       req.session.regenerate((regenErr) => {
         if (regenErr) {
           return next(regenErr);

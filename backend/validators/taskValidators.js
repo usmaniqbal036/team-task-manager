@@ -35,3 +35,18 @@ export const updateTaskStatusSchema = Joi.object({
     'any.required': 'Status is required',
   }),
 });
+
+// Query-string validation for GET /tasks. Rejects objects/arrays such as ?status[$ne]=x
+const idParam = Joi.string()
+  .trim()
+  .max(64)
+  .pattern(/^[A-Za-z0-9_-]+$/)
+  .messages({ 'string.pattern.base': 'Invalid identifier format' });
+
+export const taskQuerySchema = Joi.object({
+  teamId: idParam,
+  assigneeId: idParam,
+  status: Joi.string().valid('To Do', 'In Progress', 'Completed'),
+  priority: Joi.string().valid('Low', 'Medium', 'High'),
+  search: Joi.string().trim().max(100).allow(''),
+});

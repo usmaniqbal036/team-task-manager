@@ -1,28 +1,26 @@
 {
-  "name": "backend",
+  "name": "team-task-manager-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend API for Team Task Manager with Express, MongoDB Atlas, Passport.js, and PostgreSQL session store",
   "main": "server.js",
-  "scripts": { "dev": "nodemon server.js", "start": "node server.js" },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "module",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js"
+  },
   "dependencies": {
-    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "connect-pg-simple": "^10.0.0",
-    "cors": "^2.8.6",
-    "dotenv": "^18.0.8",
-    "express": "^5.3.0",
-    "express-session": "^1.19.0",
-    "express-validator": "^7.3.2",
-    "helmet": "^8.3.0",
-    "mongoose": "^9.11.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.2",
+    "helmet": "^8.1.0",
+    "joi": "^17.13.3",
+    "mongoose": "^8.13.0",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
-    "pg": "^8.23.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
+    "pg": "^8.13.3"
   }
 }

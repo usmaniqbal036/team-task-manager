@@ -20,7 +20,7 @@ const UserSchema = new Schema(
     passwordHash: {
       type: String,
       required: [true, 'Password hash is required'],
-      select: false,
+      select: false, // Do not return passwordHash in standard queries
     },
   },
   {

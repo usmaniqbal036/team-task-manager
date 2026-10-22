@@ -1,4 +1,5 @@
 import { sendError } from '../utils/responseHandler.js';
+import { isTeamMember, isTeamOwner } from '../utils/access.js';
 import { DataStore } from '../services/dataStore.js';
 
 export const requireAuth = (req, res, next) => {
@@ -22,10 +23,7 @@ export const requireTeamAccess = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    const memberIds = (team.members || []).map((m) => (typeof m === 'object' ? m.id : m));
-
-    if (ownerId !== userId && !memberIds.includes(userId)) {
+    if (!isTeamMember(team, userId)) {
       return sendError(res, 'Access denied. You do not belong to this team.', 403);
     }
 
@@ -50,8 +48,7 @@ export const requireTeamOwner = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    if (ownerId !== userId) {
+    if (!isTeamOwner(team, userId)) {
       return sendError(res, 'Access denied. Only the team owner can perform this action.', 403);
     }
 

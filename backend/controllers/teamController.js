@@ -1,5 +1,6 @@
 import { DataStore } from '../services/dataStore.js';
 import { sendSuccess, sendError } from '../utils/responseHandler.js';
+import { getTeamMemberIds, isTeamMember, isTeamOwner } from '../utils/access.js';
 
 export const getTeams = async (req, res, next) => {
   try {
@@ -33,11 +34,8 @@ export const getTeamById = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-  
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    const memberIds = (team.members || []).map((m) => (typeof m === 'object' ? m.id : m));
-
-    if (ownerId !== userId && !memberIds.includes(userId)) {
+    // Access check: User must be owner or member
+    if (!isTeamMember(team, userId)) {
       return sendError(res, 'Access denied. You do not belong to this team.', 403);
     }
 
@@ -57,8 +55,7 @@ export const updateTeam = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    if (ownerId !== userId) {
+    if (!isTeamOwner(team, userId)) {
       return sendError(res, 'Access denied. Only the team owner can edit team details.', 403);
     }
 
@@ -84,8 +81,7 @@ export const addMember = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    if (ownerId !== currentUserId) {
+    if (!isTeamOwner(team, currentUserId)) {
       return sendError(res, 'Access denied. Only the team owner can invite members.', 403);
     }
 
@@ -96,14 +92,30 @@ export const addMember = async (req, res, next) => {
       targetUser = await DataStore.findUserByEmail(email);
     }
 
+    if (!targetUser && email) {
+      // Unregistered email: record a pending invitation (stubbed, no SMTP). The invitee is
+      // added to the team automatically when they register with this address.
+      const cleanEmail = email.toLowerCase().trim();
+      if ((team.pendingInvites || []).some((i) => i.email === cleanEmail)) {
+        return sendError(res, 'An invitation has already been sent to this email address.', 409);
+      }
+      const invitedTeam = await DataStore.addPendingInvite(teamId, cleanEmail, currentUserId);
+      console.log(`[Invite:stub] Would email ${cleanEmail} an invitation to join "${team.name}".`);
+      return sendSuccess(
+        res,
+        invitedTeam,
+        `Invitation recorded for ${cleanEmail}. They will join automatically once they register.`,
+        202
+      );
+    }
+
     if (!targetUser) {
       return sendError(res, 'No registered user found with the provided details.', 404, {
         member: 'User not found. Ensure the user has registered first.',
       });
     }
 
-    const existingMemberIds = (team.members || []).map((m) => (typeof m === 'object' ? m.id : m));
-    if (existingMemberIds.includes(targetUser.id)) {
+    if (getTeamMemberIds(team).includes(targetUser.id)) {
       return sendError(res, 'User is already a member of this team.', 409);
     }
 
@@ -125,14 +137,13 @@ export const removeMember = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-
-  
-    if (targetUserId === ownerId) {
+    // Owner cannot be removed from their own team
+    if (isTeamOwner(team, targetUserId)) {
       return sendError(res, 'The team owner cannot be removed from the team.', 400);
     }
 
-    if (currentUserId !== ownerId && currentUserId !== targetUserId) {
+    // Permission check: either the owner is removing a member, or a member is removing themselves (leaving)
+    if (!isTeamOwner(team, currentUserId) && currentUserId !== targetUserId) {
       return sendError(
         res,
         'Access denied. You do not have permission to remove this member.',
@@ -157,8 +168,7 @@ export const deleteTeam = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-    const ownerId = typeof team.owner === 'object' ? team.owner.id : team.owner;
-    if (ownerId !== currentUserId) {
+    if (!isTeamOwner(team, currentUserId)) {
       return sendError(res, 'Access denied. Only the team owner can delete this team.', 403);
     }
 

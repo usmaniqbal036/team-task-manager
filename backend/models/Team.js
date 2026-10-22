@@ -28,6 +28,15 @@ const TeamSchema = new Schema(
         index: true,
       },
     ],
+    // Pending email invitations (email delivery is stubbed). Accepted automatically on registration.
+    invites: [
+      {
+        _id: false,
+        email: { type: String, required: true, lowercase: true, trim: true },
+        invitedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,
