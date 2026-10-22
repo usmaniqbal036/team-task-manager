@@ -75,8 +75,6 @@ export const getDashboardStats = async (req, res, next) => {
   }
 };
 
-// Due-date reminders shown once after login: the user's own open tasks that are
-// overdue or due within the next REMINDER_WINDOW_DAYS days.
 const REMINDER_WINDOW_DAYS = 3;
 
 export const getReminders = async (req, res, next) => {

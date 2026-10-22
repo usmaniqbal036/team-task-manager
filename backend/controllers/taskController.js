@@ -58,7 +58,6 @@ export const createTask = async (req, res, next) => {
       return sendError(res, 'Specified team does not exist.', 404);
     }
 
-    // Verify current user is a team member or owner
     if (!isTeamMember(team, userId)) {
       return sendError(
         res,
@@ -67,7 +66,6 @@ export const createTask = async (req, res, next) => {
       );
     }
 
-    // Verify assignee belongs to this team if provided
     if (assignedTo) {
       if (!isTeamMember(team, assignedTo)) {
         return sendError(
@@ -114,12 +112,10 @@ export const updateTask = async (req, res, next) => {
       return sendError(res, 'Associated team not found.', 404);
     }
 
-    // Check user membership
     if (!isTeamMember(team, userId)) {
       return sendError(res, 'Access denied. You do not belong to this team.', 403);
     }
 
-    // If new assignee is passed, verify assignee is in the team
     if (req.body.assignedTo) {
       if (!isTeamMember(team, req.body.assignedTo)) {
         return sendError(
@@ -199,7 +195,6 @@ export const deleteTask = async (req, res, next) => {
 
     const creatorId = toId(task.createdBy);
 
-    // Delete permission: Only team owner or task creator can delete
     if (!isTeamOwner(team, userId) && userId !== creatorId) {
       return sendError(
         res,

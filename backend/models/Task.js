@@ -70,7 +70,6 @@ const TaskSchema = new Schema(
   }
 );
 
-// Compound index for efficient team tasks querying and filtering
 TaskSchema.index({ team: 1, status: 1, priority: 1 });
 
 export const Task = mongoose.models.Task || mongoose.model('Task', TaskSchema);

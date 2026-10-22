@@ -34,7 +34,6 @@ export const getTeamById = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-    // Access check: User must be owner or member
     if (!isTeamMember(team, userId)) {
       return sendError(res, 'Access denied. You do not belong to this team.', 403);
     }
@@ -93,8 +92,6 @@ export const addMember = async (req, res, next) => {
     }
 
     if (!targetUser && email) {
-      // Unregistered email: record a pending invitation (stubbed, no SMTP). The invitee is
-      // added to the team automatically when they register with this address.
       const cleanEmail = email.toLowerCase().trim();
       if ((team.pendingInvites || []).some((i) => i.email === cleanEmail)) {
         return sendError(res, 'An invitation has already been sent to this email address.', 409);
@@ -137,12 +134,10 @@ export const removeMember = async (req, res, next) => {
       return sendError(res, 'Team not found.', 404);
     }
 
-    // Owner cannot be removed from their own team
     if (isTeamOwner(team, targetUserId)) {
       return sendError(res, 'The team owner cannot be removed from the team.', 400);
     }
 
-    // Permission check: either the owner is removing a member, or a member is removing themselves (leaving)
     if (!isTeamOwner(team, currentUserId) && currentUserId !== targetUserId) {
       return sendError(
         res,

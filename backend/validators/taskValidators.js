@@ -36,7 +36,6 @@ export const updateTaskStatusSchema = Joi.object({
   }),
 });
 
-// Query-string validation for GET /tasks. Rejects objects/arrays such as ?status[$ne]=x
 const idParam = Joi.string()
   .trim()
   .max(64)

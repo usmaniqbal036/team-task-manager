@@ -4,7 +4,6 @@ import { memoryDb } from '../services/dataStore.js';
 
 const isProduction = () => process.env.NODE_ENV === 'production';
 
-// Development-only fallback: in-memory store pre-filled with demo users/teams/tasks.
 const useDevelopmentMemoryStore = async (reason) => {
   console.log(`[Database] ${reason} Using the in-memory store (development only).`);
   await memoryDb.initSeed();

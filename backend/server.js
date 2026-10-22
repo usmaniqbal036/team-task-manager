@@ -12,10 +12,8 @@ async function startServer() {
 
   const app = createApp();
 
-  // 404 for undefined routes
   app.use(notFoundHandler);
 
-  // Centralized error handler
   app.use(errorHandler);
 
   const server = app.listen(PORT, () => {

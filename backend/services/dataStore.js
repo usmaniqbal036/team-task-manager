@@ -5,7 +5,6 @@ import { Team } from '../models/Team.js';
 import { Task } from '../models/Task.js';
 import { isTeamMember, toId } from '../utils/access.js';
 
-// In-memory fallback database for local preview/development before MongoDB Atlas is linked
 class MemoryDatabase {
   users = new Map();
   teams = new Map();
@@ -145,15 +144,13 @@ class MemoryDatabase {
   }
 }
 
-export const memoryDb = new MemoryDatabase(); // seeded on demand by config/db.js (development only)
+export const memoryDb = new MemoryDatabase();
 
-// Escapes user input so it is matched literally inside $regex queries (prevents ReDoS / regex injection)
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const isMongooseConnected = () => mongoose.connection.readyState === 1;
 
 export class DataStore {
-  // USER METHODS
   static async findUserByEmail(email, includePassword = false) {
     const cleanEmail = email.toLowerCase().trim();
     if (isMongooseConnected()) {
@@ -257,7 +254,6 @@ export class DataStore {
     return { ...newUser };
   }
 
-  // TEAM METHODS
   static async getTeamsForUser(userId) {
     if (isMongooseConnected()) {
       const objId = new mongoose.Types.ObjectId(userId);
@@ -394,7 +390,6 @@ export class DataStore {
     return this.populateTeam(t);
   }
 
-  // Email invitations are stubbed (no SMTP): the invite is stored and the user joins on registration.
   static async addPendingInvite(teamId, email, invitedById) {
     const cleanEmail = email.toLowerCase().trim();
     if (isMongooseConnected()) {
@@ -425,7 +420,6 @@ export class DataStore {
     return this.populateTeam(t);
   }
 
-  // Called right after registration: joins the new user to every team that invited their email.
   static async acceptPendingInvites(user) {
     const email = user.email.toLowerCase().trim();
     if (isMongooseConnected()) {
@@ -482,7 +476,6 @@ export class DataStore {
     }
 
     if (!memoryDb.teams.has(teamId)) return false;
-    // Cascade delete tasks in this team
     for (const [taskId, task] of memoryDb.tasks.entries()) {
       const tTeamId = toId(task.team);
       if (tTeamId === teamId) {
@@ -492,14 +485,12 @@ export class DataStore {
     return memoryDb.teams.delete(teamId);
   }
 
-  // TASK METHODS
   static async getTasks(filters) {
-    // First, verify accessible teams for this user
     const userTeams = await this.getTeamsForUser(filters.userId);
     const accessibleTeamIds = new Set(userTeams.map((t) => t.id));
 
     if (filters.teamId && !accessibleTeamIds.has(filters.teamId)) {
-      return []; // Not authorized to view tasks of unrelated teams
+      return [];
     }
 
     if (isMongooseConnected()) {
@@ -699,7 +690,6 @@ export class DataStore {
     return memoryDb.tasks.delete(taskId);
   }
 
-  // Helpers for population in memory mode
   static populateTeam(t) {
     const ownerId = toId(t.owner);
     const ownerObj = memoryDb.users.get(ownerId);

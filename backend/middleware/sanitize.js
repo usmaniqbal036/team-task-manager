@@ -1,6 +1,3 @@
-// Request sanitization: runs on every request before validation.
-//  - removes keys that could be used for NoSQL operator injection ("$gt", "a.b")
-//  - strips HTML tags and null bytes from string values (passwords are left untouched)
 
 const UNTOUCHED_KEYS = new Set(['password', 'confirmPassword']);
 
