@@ -31,7 +31,7 @@ export const configureSession = () => {
       const pool = new pg.Pool({
         connectionString: databaseUrl,
         ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-        max: 10,
+        max:3 ,
         idleTimeoutMillis: 30000,
       });
 
