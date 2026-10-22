@@ -1,6 +1,3 @@
-import { createApp } from '../expressApp.js';
-
-const app = createApp();
 import dotenv from 'dotenv';
 dotenv.config();
 
