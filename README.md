@@ -64,7 +64,7 @@ team-task-manager/
 │   ├── routes/                   # authRoutes, teamRoutes, taskRoutes, userRoutes
 │   ├── services/                 # dataStore.js (Mongoose / Memory fallback)
 │   ├── validators/               # Joi validation schemas
-│   ├── utils/                    # responseHandler.js
+│   ├── utils/                    # responseHandler.js, access.js (shared owner/member helpers)
 │   ├── app.js                    # Express application factory
 │   ├── server.js                 # Standalone backend server runner
 │   ├── .env.example
@@ -94,6 +94,7 @@ team-task-manager/
 | `description` | String | Optional description (max 500 characters) |
 | `owner` | ObjectId | Reference to `User` (team administrator) |
 | `members` | [ObjectId] | Array of references to `User` |
+| `invites` | [{ email, invitedBy, createdAt }] | Pending email invitations (delivery stubbed); accepted on registration |
 | `createdAt` / `updatedAt` | Date | Timestamps |
 
 ### Task Model (`Task.js`)
@@ -126,7 +127,7 @@ team-task-manager/
 - `POST /api/teams` — Create a new team (`name`, `description`)
 - `GET /api/teams/:id` — Get team details, owner, and member roster
 - `PUT /api/teams/:id` — Update team name and description (Owner only)
-- `POST /api/teams/:id/members` — Add registered user to team by `userId` or `email` (Owner only)
+- `POST /api/teams/:id/members` — Add a registered user by `userId`/`email`, or invite an unregistered `email` (202, stubbed delivery) (Owner only)
 - `DELETE /api/teams/:id/members/:userId` — Remove member (Owner or member leaving)
 - `DELETE /api/teams/:id` — Delete team and cascade delete associated tasks (Owner only)
 
@@ -140,6 +141,7 @@ team-task-manager/
 
 ### Users & Dashboard
 - `GET /api/users/search?q=` — Search registered user directory
+- `GET /api/users/reminders` — Own open tasks that are overdue or due within 3 days (shown once after login)
 - `GET /api/users/dashboard-stats` — Get aggregated metrics (total, pending, completed, overdue, breakdown)
 - `GET /api/health` — Service health check
 
@@ -157,12 +159,6 @@ npm install
 npm run dev
 # Running on http://localhost:5000
 ```
-
-For MongoDB Atlas, copy `backend/.env.example` to `backend/.env` and replace the
-`MONGODB_URI` placeholder with the connection string from Atlas. The backend
-loads `.env` from the `backend` directory; `.env.example` is only a template.
-If `MONGODB_URI` is missing or the connection fails, the API starts with a
-non-persistent in-memory store, and database changes will be lost when it stops.
 
 #### Terminal 2 (Frontend):
 ```bash
@@ -240,43 +236,54 @@ gcloud run deploy team-task-manager-api \
 
 ---
 
-## 8. Git & GitHub Branching Workflow
+## 8. Security Practices & Bonus Features
+
+### Security practices
+- **Authentication:** Passport.js (local strategy) + `express-session`; session cookie is `HttpOnly`, `Secure` and `SameSite=None` in production.
+- **Session store:** PostgreSQL (`connect-pg-simple`) in production, in-memory store in development only.
+- **Authorization:** `requireAuth` protects every route except `/api/auth/register`, `/api/auth/login`, `/api/auth/me` and `/api/health`; team/task routes also check ownership/membership.
+- **Passwords:** hashed with bcrypt, never stored or logged in plain text.
+- **Validation:** Joi schemas for request bodies **and** query strings (`GET /tasks`, `GET /users/search`).
+- **Sanitization:** `middleware/sanitize.js` removes `$`/`.` keys (NoSQL operator injection) and strips HTML tags/null bytes from input; search terms are regex-escaped before reaching MongoDB.
+- **Hardening:** Helmet headers, rate limiting on auth and API routes, restricted CORS.
+- **Production fail-fast:** with `NODE_ENV=production` the server refuses to start without `MONGODB_URI`, `SESSION_SECRET` and `DATABASE_URL`. Demo data is only seeded for the development in-memory store.
+
+### Bonus features
+- **Due-date reminders (login only):** after logging in, a popup lists your open tasks that are overdue or due within 3 days (`GET /api/users/reminders`).
+- **Role-based access:** only the team owner can edit/delete the team and manage members; only the owner or task creator can delete a task.
+- **Invite by email (stubbed):** inviting an unregistered email records a pending invitation (HTTP 202, logged to the console instead of sent). The invitee joins the team automatically when they register with that email.
+
+---
+
+## 9. Git & GitHub Branching Workflow
+
+Work is split into small branches that build on each other. Open one pull request per branch and merge them in this order
+(each PR targets the previous branch; GitHub retargets it to `main` once the previous PR is merged):
+
+| # | Branch | Purpose |
+|---|---|---|
+| 1 | `feature/convert-to-javascript` | Split into `frontend/` + `backend/`, convert to JavaScript, new Home page and UI theme |
+| 2 | `fix/input-sanitization` | Request sanitization, query validation, regex escaping |
+| 3 | `fix/production-safety-guards` | No insecure fallbacks or demo data in production |
+| 4 | `feature/due-date-reminders` | Bonus: login reminders for overdue / due-soon tasks |
+| 5 | `feature/invite-by-email-stub` | Bonus: stubbed email invitations accepted on registration |
+| 6 | `docs/update-readme` | Documentation |
 
 ```bash
-# 1. Initialize main repository
-git init
-git checkout -b main
-git add .
-git commit -m "feat: initial commit of Team Task Manager structure"
+git push -u origin feature/convert-to-javascript fix/input-sanitization fix/production-safety-guards \
+  feature/due-date-reminders feature/invite-by-email-stub docs/update-readme
 
-# 2. Authentication feature branch
-git checkout -b feature/authentication
-# [make changes]
-git add backend/config/passport.js backend/controllers/authController.js frontend/src/pages/LoginPage.jsx
-git commit -m "feat(auth): implement Passport.js local strategy and session cookies"
-git push -u origin feature/authentication
-
-# 3. Team Management feature branch
-git checkout -b feature/team-management
-# [make changes]
-git add backend/controllers/teamController.js frontend/src/pages/TeamsPage.jsx
-git commit -m "feat(teams): implement team CRUD and role authorization"
-git push -u origin feature/team-management
-
-# 4. Task Management feature branch
-git checkout -b feature/task-management
-# [make changes]
-git add backend/controllers/taskController.js frontend/src/pages/TasksPage.jsx
-git commit -m "feat(tasks): implement task CRUD, filters, and Kanban board"
-git push -u origin feature/task-management
-
-# 5. Open Pull Request on GitHub
-gh pr create --base main --head feature/authentication --title "Feature: Authentication"
+gh pr create --base main --head feature/convert-to-javascript --title "Convert to JavaScript, split frontend/backend, new UI"
+gh pr create --base feature/convert-to-javascript --head fix/input-sanitization --title "Fix: sanitize input and validate query params"
+gh pr create --base fix/input-sanitization --head fix/production-safety-guards --title "Fix: refuse insecure fallbacks in production"
+gh pr create --base fix/production-safety-guards --head feature/due-date-reminders --title "Feature: due-date reminders after login"
+gh pr create --base feature/due-date-reminders --head feature/invite-by-email-stub --title "Feature: invite by email (stubbed)"
+gh pr create --base feature/invite-by-email-stub --head docs/update-readme --title "Docs: update README"
 ```
 
 ---
 
-## 9. Verification & Testing Checklist
+## 10. Verification & Testing Checklist
 
 - [x] **Registration:** New user registration with name, email, password, confirmPassword validation.
 - [x] **Duplicate Rejection:** Registering an existing email returns 409 Conflict.
@@ -285,7 +292,7 @@ gh pr create --base main --head feature/authentication --title "Feature: Authent
 - [x] **Logout:** Destroys session in session store and clears `ttm.sid` cookie.
 - [x] **Team Creation:** User creates a team and is automatically assigned as owner.
 - [x] **Team Authorization:** Only the team owner can edit name/description or delete the team.
-- [x] **Team Member Management:** Owner can invite existing users by email or ID; members can leave.
+- [x] **Team Member Management:** Owner can add existing users by email or ID and invite new people by email (stubbed); members can leave.
 - [x] **Task Creation:** Tasks require a valid team; assignees must belong to the selected team.
 - [x] **Task Status Update:** Quick status transition between To Do, In Progress, and Completed.
 - [x] **Task Filtering:** Filter by team, assignee, status, priority, and text search.
