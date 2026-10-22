@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -7,6 +7,7 @@ import {
   Check,
   CheckCircle2,
   Filter,
+  KanbanSquare,
   Layers,
   Lock,
   Menu,
@@ -15,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
+
 
 const Reveal = ({ children, className = '' }) => {
   const ref = useRef(null);
