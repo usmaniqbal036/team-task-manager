@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { createApp } from './app.js';
+import { createApp } from './expressApp.js';
 import { connectDB } from './config/db.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
