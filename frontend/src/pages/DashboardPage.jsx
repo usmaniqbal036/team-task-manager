@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Users2, CheckCircle2, AlertTriangle, Plus, ArrowRight, Activity } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth.js';
@@ -18,7 +18,12 @@ export const DashboardPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+  const toastRef = useRef(toast);
   const { refreshTrigger, openCreateTask } = useOutletContext();
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
 
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -28,31 +33,43 @@ export const DashboardPage = () => {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      const data = await authService.getDashboardStats();
-      setStats(data);
+      return await authService.getDashboardStats();
     } catch (err) {
-      toast.error('Could not load dashboard stats', err.message);
-    } finally {
-      setLoading(false);
+      toastRef.current.error('Could not load dashboard stats', err.message);
+      return null;
     }
-  }, [toast]);
+  }, []);
+
+  const fetchDashboardData = useCallback(async () => {
+    const data = await fetchStats();
+    if (data) setStats(data);
+    setLoading(false);
+  }, [fetchStats]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData, refreshTrigger]);
+    let ignore = false;
+    fetchStats().then((data) => {
+      if (ignore) return;
+      if (data) setStats(data);
+      setLoading(false);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [fetchStats, refreshTrigger]);
 
   const handleStatusChange = async (task, newStatus) => {
     try {
       await taskService.updateStatus(task.id, newStatus);
-      toast.success('Status updated', `Task "${task.title}" is now ${newStatus}`);
+      toastRef.current.success('Status updated', `Task "${task.title}" is now ${newStatus}`);
       fetchDashboardData();
       if (selectedTask?.id === task.id) {
         setSelectedTask({ ...selectedTask, status: newStatus });
       }
     } catch (err) {
-      toast.error('Failed to change status', err.message);
+      toastRef.current.error('Failed to change status', err.message);
     }
   };
 
@@ -60,11 +77,11 @@ export const DashboardPage = () => {
     if (!taskToDelete) return;
     try {
       await taskService.deleteTask(taskToDelete.id);
-      toast.success('Task deleted', `"${taskToDelete.title}" was removed.`);
+      toastRef.current.success('Task deleted', `"${taskToDelete.title}" was removed.`);
       setTaskToDelete(null);
       fetchDashboardData();
     } catch (err) {
-      toast.error('Failed to delete task', err.message);
+      toastRef.current.error('Failed to delete task', err.message);
     }
   };
 
