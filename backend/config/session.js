@@ -65,7 +65,7 @@ export const configureSession = () => {
   maxAge: 1000 * 60 * 60 * 24 * 7,
   httpOnly: true,
   secure: isProduction,
-  sameSite: isProduction ? 'none' : 'lax',
+  sameSite: 'lax',
   path: '/',
 },
   });
