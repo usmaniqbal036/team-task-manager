@@ -60,12 +60,12 @@ export const configureSession = () => {
     saveUninitialized: false,
     rolling: true,
     proxy: true,
-    cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7,
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
-      path: '/',
-    },
+cookie: {
+  maxAge: 1000 * 60 * 60 * 24 * 7,
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'lax',
+  path: '/',
+},
   });
 };
