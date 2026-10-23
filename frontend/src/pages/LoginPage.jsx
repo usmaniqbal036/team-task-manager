@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Eye, EyeOff, FolderKanban, ArrowRight, ShieldCheck } from 'lucide-react';
@@ -15,7 +15,7 @@ export const LoginPage = () => {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm();
+  } = useForm({ defaultValues: { email: '', password: '' } });
 
   const onSubmit = async (data) => {
     setSubmitting(true);
@@ -54,7 +54,7 @@ export const LoginPage = () => {
             </div>
           )}
 
-          <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+          <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} autoComplete="off">
             <div>
               <label
                 className="block text-xs font-semibold text-slate-700 mb-1"
@@ -65,7 +65,7 @@ export const LoginPage = () => {
               <input
                 id="login-email"
                 type="email"
-                autoComplete="email"
+                autoComplete="off"
                 placeholder="name@company.com"
                 {...register('email', {
                   required: 'Email address is required',
@@ -90,7 +90,7 @@ export const LoginPage = () => {
                 <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   {...register('password', {
                     required: 'Password is required',
