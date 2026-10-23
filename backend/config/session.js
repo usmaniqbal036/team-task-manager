@@ -31,8 +31,9 @@ export const configureSession = () => {
       const pool = new pg.Pool({
         connectionString: databaseUrl,
         ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
-        max:3 ,
-        idleTimeoutMillis: 30000,
+        max: 3,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 10000,
       });
 
       pool.on('error', (err) => {
@@ -58,14 +59,14 @@ export const configureSession = () => {
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
-    rolling: true,
+    rolling: false,
     proxy: true,
-cookie: {
-  maxAge: 1000 * 60 * 60 * 24 * 7,
-  httpOnly: true,
-  secure: isProduction,
-  sameSite: 'lax',
-  path: '/',
-},
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      path: '/',
+    },
   });
 };
