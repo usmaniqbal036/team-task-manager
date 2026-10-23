@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plus, Users2 } from 'lucide-react';
 import { teamService } from '../services/teamService.js';
 import { taskService } from '../services/taskService.js';
@@ -17,6 +17,11 @@ export const TeamsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const toast = useToast();
+  const toastRef = useRef(toast);
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null);
@@ -24,35 +29,53 @@ export const TeamsPage = () => {
   const [deletingTeam, setDeletingTeam] = useState(null);
   const [submittingDelete, setSubmittingDelete] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [teamsData, tasksData] = await Promise.all([
         teamService.getTeams(),
         taskService.getTasks(),
       ]);
-      setTeams(teamsData);
-      setTasks(tasksData);
+      return { teamsData, tasksData };
     } catch (err) {
-      toast.error('Could not load teams', err.message);
-    } finally {
-      setLoading(false);
+      toastRef.current.error('Could not load teams', err.message);
+      return null;
     }
-  }, [toast]);
+  }, []);
+
+  const loadData = useCallback(async () => {
+    const result = await fetchData();
+    if (result) {
+      setTeams(result.teamsData);
+      setTasks(result.tasksData);
+    }
+    setLoading(false);
+  }, [fetchData]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let ignore = false;
+    fetchData().then((result) => {
+      if (ignore) return;
+      if (result) {
+        setTeams(result.teamsData);
+        setTasks(result.tasksData);
+      }
+      setLoading(false);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [fetchData]);
 
   const handleDeleteTeam = async () => {
     if (!deletingTeam) return;
     setSubmittingDelete(true);
     try {
       await teamService.deleteTeam(deletingTeam.id);
-      toast.success('Team deleted', `"${deletingTeam.name}" has been removed.`);
+      toastRef.current.success('Team deleted', `"${deletingTeam.name}" has been removed.`);
       setDeletingTeam(null);
       loadData();
     } catch (err) {
-      toast.error('Failed to delete team', err.message);
+      toastRef.current.error('Failed to delete team', err.message);
     } finally {
       setSubmittingDelete(false);
     }
